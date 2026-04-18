@@ -12,6 +12,7 @@ void drive_until(int speed, bool (*stop_condition)(int), int condition_arg);
 bool black_detected(int ticks);
 void rotate_relative(int speed, double deg);
 void halt_robot(char* message);
+bool is_tophat_black(int th);
 //void one_sensor_line_follow(int sensor, int ticks);
 //Claw Servo Ports
 #define CLAW_VERT 0
@@ -28,6 +29,7 @@ void halt_robot(char* message);
 //Recommended when letting motors stop to include a mechanical wait.
 #define mechanical_wait() do { msleep(150); } while(false);
 #define short_mechanical_wait() do { msleep(50); } while(false); //wait a very short time for mechanical reasons or to slow down infinite loop execution.
+#define SYNC_GAIN    0.2f // Steering correction intensity, for uneven motors/wheels
 
 // get time in milliseconds
 long msecs() {
@@ -73,11 +75,44 @@ void rotate_relative(int speed, double deg) {
 #define MOTOR_MOV_MAX_SPEED 1200
 #define MOTOR_MOV_MIN_SPEED 400 // For square up
 
+void right_sensor_line_follow(int ticks) {
+    const int calibration_base = 300;
+    const int calibration_correct = 30;
+    const int travel_base = 800;
+    const int travel_correction = 45;
+    const int too_angled_threshold = 1000;
+    //look for black line
+    while(!is_tophat_black(R_TH)) {
+        lmav(calibration_base + calibration_correct);
+        rmav(calibration_base - calibration_correct);
+        short_mechanical_wait();
+    }
+    //if we spent too long calibrating we are too angled, we must correct quickly
+    if(normalized_gmpc_all() > too_angled_threshold) {
+        lmav(-calibration_base);
+        rmav(calibration_base);
+        msleep(180);
+    }
+    //Ticks only are counted post-calibration
+    cmpc_all();
+    while(normalized_gmpc_all() < abs(ticks)) {
+		if(is_tophat_black(R_TH)) {
+            lmav(travel_base - travel_correction);
+            rmav(travel_base + travel_correction);
+        } else {
+            lmav(travel_base + travel_correction);
+            rmav(travel_base - travel_correction);
+        }
+        short_mechanical_wait();
+    }
+}
+
 void rotate_smooth(double deg) {
-    const double ticks_per_deg = 11.80;
+    const double ticks_per_deg = 11.99;
     // Because we slow down as we approach the end, momentum is not
     // a problem, no degree correction needed
     cmpc_all();
+    int total_correction = 0;
     int remaining = abs(deg * ticks_per_deg) - normalized_gmpc_all();
     while(remaining > 0) {
         int auto_speed = remaining * MOTOR_TURN_START_RATE;
@@ -85,6 +120,11 @@ void rotate_smooth(double deg) {
         if (normalized_gmpc_all() < MOTOR_TURN_SLOW_START_RAMP_TICKS) {
             auto_speed =  normalized_gmpc_all() * MOTOR_TURN_START_RATE;
         }
+        int left_ticks = abs(get_motor_position_counter(L_MTR));
+        int right_ticks = abs(get_motor_position_counter(R_MTR));
+        int error = left_ticks - right_ticks;
+        int correction = (int)(error * SYNC_GAIN);
+        total_correction += abs(correction);
         // slow stop
         if (remaining < MOTOR_TURN_SLOW_STOP_RAMP_TICKS) {
             auto_speed = remaining * MOTOR_TURN_STOP_RATE;
@@ -92,16 +132,18 @@ void rotate_smooth(double deg) {
         // Clamp the speed between our safe limits
         if (auto_speed > MOTOR_TURN_MAX_SPEED) auto_speed = MOTOR_TURN_MAX_SPEED;
         if (auto_speed < MOTOR_TURN_MIN_SPEED) auto_speed = MOTOR_TURN_MIN_SPEED;
-        lmav(auto_speed * sgn(deg));
-        rmav(auto_speed * -sgn(deg));
+        //lmav((auto_speed - correction) * sgn(deg));
+        //rmav((auto_speed + correction) * -sgn(deg));
+        lmav((auto_speed) * sgn(deg));
+        rmav((auto_speed) * -sgn(deg));
         msleep(10);
         remaining = abs(deg * ticks_per_deg) - normalized_gmpc_all();
         //printf("rotate_smooth: remaining %d speed %d\n", remaining, auto_speed);
     }
     freeze(L_MTR);
     freeze(R_MTR);
-    printf("rotate_smooth: tick_guess %lf, left_ticks %d, right_ticks %d\n",
-           deg * ticks_per_deg, gmpc(L_MTR), gmpc(R_MTR));
+    printf("rotate_smooth: tick_guess %lf, left_ticks %d, right_ticks %d, total_correction %d\n",
+           deg * ticks_per_deg, gmpc(L_MTR), gmpc(R_MTR), total_correction);
 }
 
 //Returns if tophat at port [th] is reading black.
@@ -140,6 +182,8 @@ double get_calibrated_gyro_reading(int precision, gyro_axis_callback axis) {
     }
     return bias / (double)precision;
 }
+
+
 
 /* Simply drives forward(+speed)/backward(-speed). Resets motor position counters beforehand.
 * speed = motor speed while driving
@@ -257,7 +301,7 @@ void straight_square_up(int speed, int tick_guess) {
 // --- WEIGHT DEFINITIONS (In Grams) ---
 #define WEIGHT_EMPTY   0
 #define WEIGHT_CUBE    30
-#define WEIGHT_BOTGUY  50
+#define WEIGHT_BOTGUY  90
 
 // --- PHYSICS DERIVATION CONSTANTS ---
 // Snap ratio is the pct of remaining units to move in a step
@@ -271,9 +315,11 @@ void straight_square_up(int speed, int tick_guess) {
 
 // --- GLOBAL STATE --- Current weight in the claw
 int CURRENT_WEIGHT_G = WEIGHT_EMPTY; 
+extern int start_seconds;
 
 void halt_robot(char* message) {
-    printf("CRITICAL HALT: %s\n", message);
+    int time_taken = seconds() - start_seconds;
+    printf("CRITICAL HALT: %s, took %d seconds\n", message, time_taken);
     ao(); disable_servos(); exit(1);
 }
 
@@ -294,7 +340,8 @@ void _move_servo_engine(int port, int target_pos, float up_scale, float down_sca
     long start_ms = msecs();
 
     //  Proportional Loop: Moves in decreasing increments
-    printf("move_servo_engine: Starting Servo %d, cur pos %d, desired post %d\n", port, current_pos, target_pos);
+    printf("%s, %d: Starting Servo %d, cur pos %d, desired post %d\n", __FUNCTION__, __LINE__,
+           port, current_pos, target_pos);
     while (abs(target_pos - current_pos) > SERVO_MIN_STEP_SIZE) {
         int remaining = target_pos - current_pos;
         int step = (int)(remaining * derived_ratio);
@@ -329,7 +376,7 @@ void _move_servo_engine(int port, int target_pos, float up_scale, float down_sca
     // It would still hold the current position, by internal and
     // external friction
     disable_servo(port);
-    printf("move_servo_engine: Finished Servo %d, num_steps %d, time taken %ld msecs\n",
+    printf("%s, %d: Finished Servo %d, num_steps %d, time taken %ld msecs\n", __FUNCTION__, __LINE__,
            port, num_steps, msecs() - start_ms);
 }
 
@@ -352,9 +399,8 @@ void move_horz_servo(int target_pos) {
 #define RIGHT_DIR 1 
 
 // --- CALIBRATION ---
-#define ACCEL_STEP   40   // Velocity increase per 20ms loop
+#define ACCEL_STEP   80   // Velocity increase per 20ms loop
 #define RAMP_DIST    400  // Standard ramp distance for long moves
-#define SYNC_GAIN    0.2f // Steering correction intensity, for uneven motors/wheels
 
 void drive_smooth(int target_ticks) {
     clear_motor_position_counter(LEFT_MOTOR);
@@ -388,7 +434,7 @@ void drive_smooth(int target_ticks) {
             
             // KINETIC FRICTION FLOOR: Prevents the robot from stalling short
             // of the target due to mechanical resistance at low speeds.
-            if (current_vel < 200) current_vel = 200;
+            if (current_vel < 400) current_vel = 400;
         } 
         // --- 2. THE START-UP CHECK ---
         else if (left_ticks < effective_ramp) {
@@ -413,7 +459,7 @@ void drive_smooth(int target_ticks) {
         // This ensures the reversed motor receives the negative signal it needs.
         mav(LEFT_MOTOR, (current_vel - correction) * LEFT_DIR * direction);
         mav(RIGHT_MOTOR, (current_vel + correction) * RIGHT_DIR * direction);
-        msleep(20); 
+        msleep(10); 
     }
 
     // Freeze both motors for a precise, electronically locked stop
@@ -425,7 +471,54 @@ void drive_smooth(int target_ticks) {
 }
 
 void square_up_smooth(int tick_guess) {
-    straight_square_up(1000, tick_guess); 
+    cmpc_all();
+    int speed = MOTOR_MOV_MAX_SPEED;
+    speed = abs(speed);
+    const int direction = sgn(tick_guess);
+    int dynspeed = speed; //dynamic speed is adjusted to make the square-up more accurate
+    //If black is detected on both tophats, we have successfully squared up
+    bool tape_detected = false;
+    while(!(is_tophat_black(L_TH) && is_tophat_black(R_TH))) {
+        int cur_ticks = normalized_gmpc_all();
+        // Slow start
+        if (abs(cur_ticks) < 400) {
+            // 200 min speed, 1200 max speed
+            speed = fmax(cur_ticks * 10, 100);
+            speed = fmin(speed, 1200);
+        }
+        dynspeed = speed;
+
+        //If we surpass the tick_guess and haven't hit the black line, slow down; we are very close.
+        if(!tape_detected && tick_guess < cur_ticks) {
+            dynspeed = speed / 3;
+        }
+        if(is_tophat_black(L_TH) || is_tophat_black(R_TH)) {
+            dynspeed = speed / 5;
+            tape_detected = true;
+        }
+        dynspeed *= direction;
+        if(is_tophat_black(L_TH) && !is_tophat_black(R_TH)) {
+            lmav(-dynspeed);
+            rmav(+dynspeed);
+            tape_detected = true;
+        } else if(!is_tophat_black(L_TH) && is_tophat_black(R_TH)) {
+            lmav(+dynspeed);
+            rmav(-dynspeed);
+            tape_detected = true;
+        } else { //L_TH white && R_TH white
+            lmav(+dynspeed);
+            rmav(+dynspeed);
+        }
+        //printf("%s, %d: cur_ticks %d, dynspeed %d, left black %d right black %d\n", __FUNCTION__, __LINE__,
+              //cur_ticks, dynspeed, is_tophat_black(L_TH), is_tophat_black(R_TH));
+        msleep(10);
+    }
+    // Freeze both motors for a precise, electronically locked stop
+    // use ao() for a rolling stop
+    freeze(LEFT_MOTOR);
+    freeze(RIGHT_MOTOR);
+    //printf("%s, %d: DONE tick_guess %d, left_ticks %d, right_ticks %d\n", __FUNCTION__, __LINE__,
+      //     tick_guess, gmpc(L_MTR), gmpc(R_MTR));
 }
 
 // --- GYRO CALIBRATION ---
