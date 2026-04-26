@@ -15,17 +15,19 @@ int start_seconds;
 //Each step of the robot's movement should be in instructions.h!
 //Do not clutter this file.
 int main() {
+    //left_sensor_line_follow(3000);
+    //halt_robot(" ");
     start_seconds = seconds();
     shut_down_in(119);
     enable_servos();
     claw_reset();
     printf("Starting drive to green cube\n");
-    drive_to_green_cube_from_starting_box();
-    //home_drive_to_green_cube_from_starting_box();
+    drive_and_push_cone();
     knock_green_cube(); 
     open_warehouse_doors();
     grab_botguy();
-    drive_back_to_starting_area();
+    drive_to_drums();
+    //drive_back_to_starting_area();
     halt_robot("Program ended");
     return EXIT_SUCCESS;
 }
