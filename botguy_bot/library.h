@@ -74,13 +74,12 @@ void rotate_relative(int speed, double deg) {
 #define MOTOR_TURN_SLOW_STOP_RAMP_TICKS 600
 #define MOTOR_MOV_MAX_SPEED 1200
 #define MOTOR_MOV_MIN_SPEED 400 // For square up
-
+const int calibration_base = 550;
+const int calibration_correct = 30;
+const int travel_base = 1000;
+const int travel_correction = 45;
+const int too_angled_threshold = 1000;
 void right_sensor_line_follow(int ticks) {
-    const int calibration_base = 300;
-    const int calibration_correct = 30;
-    const int travel_base = 800;
-    const int travel_correction = 45;
-    const int too_angled_threshold = 1000;
     //look for black line
     while(!is_tophat_black(R_TH)) {
         lmav(calibration_base + calibration_correct);
@@ -102,6 +101,33 @@ void right_sensor_line_follow(int ticks) {
         } else {
             lmav(travel_base + travel_correction);
             rmav(travel_base - travel_correction);
+        }
+        short_mechanical_wait();
+    }
+}
+
+void left_sensor_line_follow(int ticks) {
+    //look for black line
+    while(!is_tophat_black(L_TH)) {
+        lmav(calibration_base - calibration_correct);
+        rmav(calibration_base + calibration_correct);
+        short_mechanical_wait();
+    }
+    //if we spent too long calibrating we are too angled, we must correct quickly
+    if(normalized_gmpc_all() > too_angled_threshold) {
+        lmav(calibration_base);
+        rmav(-calibration_base);
+        msleep(180);
+    }
+    //Ticks only are counted post-calibration
+    cmpc_all();
+    while(normalized_gmpc_all() < abs(ticks)) {
+		if(is_tophat_black(L_TH)) {
+            lmav(travel_base + travel_correction);
+            rmav(travel_base - travel_correction);
+        } else {
+            lmav(travel_base - travel_correction);
+            rmav(travel_base + travel_correction);
         }
         short_mechanical_wait();
     }
@@ -165,7 +191,7 @@ bool ccwhite_detected(int supplied_arg) {
 
 //drive_until-compatible conditional. Returns if the amount of ticks driven > the ticks supplied into condition_arg.
 bool ccticks_reached(int supplied_ticks) {
-    return supplied_ticks > gmpc_all();
+    return supplied_ticks < normalized_gmpc_all();
 }
 
 /*Calibrates the gyroscope to get a starting point for future functions.
@@ -225,7 +251,9 @@ void gyro_drive_until(gyro_axis_callback gyro_axis, double gyro_bias, int speed,
     int deviation_corrector = 5;
     cmpc_all();
     double delta = 0, dev = 0;
+    printf("Gmpc all1 = %d\n", normalized_gmpc_all());
     while(!stop_condition(condition_arg)) {
+        printf("Gmpc all = %d\n", normalized_gmpc_all());
         delta = dev / deviation_corrector;
         lmav(speed + delta);
         rmav(speed + delta);
