@@ -8,7 +8,7 @@
 #define MOTORr 3
 #define SENSORl 3
 #define SENSORr 0
-#define BLACK 3200
+#define BLACK 3000
 #define RIGHT_MOTOR_CORRECTION 1.002
 #define MOTOR_SPEED_250 250
 #define MOTOR_SPEED_500 500
@@ -18,7 +18,7 @@
 #define ARM_DOWN 1760
 #define DEGREES 5
 #define CLAW_OPEN 750
-#define CLAW_POMS 550
+#define CLAW_POMS 540
 #define CLAW_START 920
 #define CLAW_CLOSE 1300
 #define ARM_CARRY 1600
@@ -245,10 +245,6 @@ void line_follow(int distance, int speed) {
     msleep(50);
 }
 
-
-
-
-
 void go_up_ramp() {
     drive(500,500);
     msleep(700);
@@ -326,35 +322,46 @@ void return_cone()
     drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
     msleep(800);
     right_degrees(25);
+    // pushing poms into the box
     drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(2700);
-    drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(1000);
+    msleep(2000);
     back_till_blk();
-	left_degrees(40);
+    // driving to drop cones
+	left_degrees(35);
     ao();
     drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(300);
+    msleep(200);
     ao();
     move_arm_fast_slow_down(ARM_DOWN);
     msleep(500);
+    // opening claw to drop cones
     move_claw(CLAW_POMS);
     msleep(500);
     move_arm(ARM_UP);
     msleep(500);
     move_claw(CLAW_CLOSE);
     msleep(500);
+    // drive to push cones into edge of upper box
     drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(500);
+    msleep(3200);
     back_till_blk();
-    right_degrees(15);
+    ao();
+    msleep(500);
+    left_degrees(170);
+    // driving backwards to move to parking spot
+    drive(-MOTOR_SPEED_1000,-MOTOR_SPEED_1000);
+    msleep(3200);
+    ao();
+    // right turn to parallel park
+    right_degrees(90);
+    /*
     drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(4000);
+    msleep(3000);
     left_degrees(120);
     drive(-MOTOR_SPEED_500,-MOTOR_SPEED_500);
-    msleep(1900);
+    msleep(2700);
     right_degrees(30);
-    
+    */
     
     
 }
@@ -368,59 +375,13 @@ int main() {
     //move_pick_cone1();
     //move_pick_cone2();
     return_cone();
-    /*
-    drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(1000);
-    ao();
-    drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(1000);
-    ao();
-    drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(1000);
-    ao();
-    drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(1000);
-    ao();
-    drive(MOTOR_SPEED_500,MOTOR_SPEED_500);
-    msleep(1000);
-    ao();
-    */
     int end_time = seconds();
     int total_time = end_time - start_time;
     printf("End Time: %d", end_time);
     printf("Total Time: %d",total_time);
     
     
-    /*
-    drive_till_blk_speed(MOTOR_SPEED_500);
-    ao();
-    msleep(1000);
-    drive(500,500);
-    msleep(7300);
-    left_degrees(75);
-   
-    left_degrees(30);
-    go_up_ramp();
-    left_degrees(10);
-    drive(-500,-500);
-    msleep(750);
-    ao();
-    move_arm_fast_slow_down(ARM_DOWN);
-    msleep(500);
-    move_claw(500);
-    msleep(500);
-    set_servo_position(ARM, 0);
-    ao();
-    right_degrees(30);
-    set_servo_position(CLAW,CLAW_CLOSE);
-    drive(1000,1000);
-    msleep(2425);
-    set_servo_position(CLAW,ARM_START);
-    ao();
     
-    right_degrees(215);
-    line_follow(5000,1500);
-    */
 
     
  }
