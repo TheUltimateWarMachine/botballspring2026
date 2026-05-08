@@ -3,7 +3,7 @@
 #include <stdlib.h>
 
 #define CLAW 2
-#define ARM 1
+#define ARM 3
 #define MOTORl 0
 #define MOTORr 3
 #define SENSORl 3
@@ -15,16 +15,17 @@
 #define MOTOR_SPEED_1000 1000
 #define MOTOR_SPEED_1500 1500
 #define WHITE 2600
-#define ARM_DOWN 1740
+#define ARM_DOWN 1570
 #define DEGREES 5
-#define CLAW_OPEN 750
-#define CLAW_POMS 540
+#define CLAW_OPEN 550
+#define CLAW_POMS 730
 #define CLAW_START 920
 #define CLAW_CLOSE 1300
 #define ARM_CARRY 1600
 #define ARM_MID 1200
 #define ARM_UP 100
 #define ARM_START 900
+#define RETURN_LINE_FOLLOW 10100
 void move_arm(int end_pos) {
     int current_pos = get_servo_position(ARM);
     printf("move_arm(S): current_pos= %d, end_pos= %d\n", current_pos, end_pos);
@@ -78,7 +79,6 @@ void move_arm_fast_slow_down(int position) {
 void drive(int speed1,int speed2) {
     mav(MOTORl, speed1);
     mav(MOTORr,speed2* RIGHT_MOTOR_CORRECTION);
-    printf("Motor Correction Happening");
 }
 void drive_till_blk(){
     while (analog(SENSORl) <= BLACK || analog(SENSORr) <= BLACK) {
@@ -248,11 +248,11 @@ void line_follow(int distance, int speed) {
 void go_up_ramp() {
     drive(MOTOR_SPEED_1500,MOTOR_SPEED_1500);
     msleep(500);
-    left_degrees(5);
+    //left_degrees(5);
     line_follow(4500,MOTOR_SPEED_1500);
     drive(MOTOR_SPEED_1500,MOTOR_SPEED_1500);
     msleep(2000);
-    line_follow(8000,MOTOR_SPEED_1500);
+    line_follow(6000,MOTOR_SPEED_1500);
     drive_till_white();
     ao();
 }
@@ -260,37 +260,49 @@ void move_pick_cone1() {
     printf("starting to go to cone1");
     enable_servos();
     move_claw(CLAW_POMS);
-	move_arm_fast_slow_down(ARM_DOWN);
+    right_degrees(DEGREES);
     drive_till_blk();
     drive(MOTOR_SPEED_1000,MOTOR_SPEED_1000);
     msleep(500);
     drive_till_blk();
     ao();
+    left_degrees(DEGREES);
     move_arm(ARM_START);
     msleep(500);
     drive(1050,1050);
     msleep(1700);
     drive(-500,-500);
-    msleep(800);
+    msleep(1100);
     right_degrees(105);
-    drive(-1500,-1500);
-    msleep(1000);
     ao();
-    msleep(15000);
-    line_follow(4150,MOTOR_SPEED_1500);
-    
-    line_follow(650,MOTOR_SPEED_1500);
+    left_degrees(10);
+    msleep(7000);
+    line_follow(6900,MOTOR_SPEED_1500);
     right_degrees(DEGREES);
+    move_arm(ARM_DOWN);
+    drive(MOTOR_SPEED_1500,MOTOR_SPEED_1500);
+    msleep(300);
+	ao();
+    msleep(500);
+    /*right_degrees(DEGREES);
     printf("Stopped to Pick Cone1");
     move_arm(ARM_DOWN);
     msleep(300);
     left_degrees(DEGREES);
     msleep(1000);
     set_servo_position(CLAW,710);
-    printf("Closed Claw, Ended Cone1");
+    printf("Closed Claw, Ended Cone1");*/
 }   
 void move_pick_cone2() {
-    line_follow(5300, MOTOR_SPEED_1500);
+    /*
+    line_follow(2000, MOTOR_SPEED_1500);
+    right_degrees(DEGREES);
+    drive(MOTOR_SPEED_1500,MOTOR_SPEED_1500);
+    msleep(300);
+	ao();
+    msleep(500);
+    */
+    line_follow(3300,MOTOR_SPEED_1500);
     right_degrees(DEGREES);
     drive(MOTOR_SPEED_1500,MOTOR_SPEED_1500);
     msleep(1200);
@@ -306,16 +318,16 @@ void return_cone()
 {
     drive(-MOTOR_SPEED_1500,-MOTOR_SPEED_1500);
     msleep(500);
-    right_degrees(215);
-    line_follow(9150,1500);
+    right_degrees(210);
+    line_follow(RETURN_LINE_FOLLOW,MOTOR_SPEED_1500);
     left_turn();
     // start of turn up ramp
     drive_till_blk();
     drive(MOTOR_SPEED_1000,MOTOR_SPEED_1000);
-    msleep(3300);
+    msleep(3350);
     drive(-MOTOR_SPEED_1500,-MOTOR_SPEED_1500);
-    msleep(300);
-    left_degrees(70);
+    msleep(250);
+    left_degrees(60);
     
     /* Go Up the ramp until white */
     go_up_ramp();
@@ -335,7 +347,7 @@ void return_cone()
     ao();
     move_arm_fast_slow_down(ARM_DOWN);
     // opening claw to drop cones
-    set_servo_position(CLAW, CLAW_POMS);
+    set_servo_position(CLAW, CLAW_OPEN);
     msleep(500);
 	set_servo_position(ARM, ARM_UP);
     msleep(500);
@@ -362,10 +374,11 @@ void return_cone()
 
 
 int main() {
+    shut_down_in(119);
     enable_servos();
     int start_time = seconds();
     printf("Start Time: %d", start_time);
-    msleep(27000);
+    msleep(35000);
     move_pick_cone1();
     move_pick_cone2();
     return_cone();
@@ -379,4 +392,3 @@ int main() {
 
     
  }
-
