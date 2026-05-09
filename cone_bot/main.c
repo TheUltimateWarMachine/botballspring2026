@@ -120,24 +120,26 @@ void right_degrees(int degrees) {
     printf("RIGHT TURN");
     cmpc(MOTORl);
     cmpc(MOTORr);
-    int ticks = -11.0 * degrees;
-    while(gmpc(MOTORl) > ticks && gmpc(MOTORr) > ticks){
+    int ticks = 11.0 * degrees;
+    while(gmpc(MOTORl) < ticks || gmpc(MOTORr) > -ticks){
         drive(MOTOR_SPEED_500, -MOTOR_SPEED_500);
     }
     ao();
     msleep(50);
 }
 void left_degrees(int degrees) {
-    printf("RIGHT TURN");
+    printf("LEFT TURN START\n");
     cmpc(MOTORl);
     cmpc(MOTORr);
-    int ticks = -11.28 * degrees;
-    while(gmpc(MOTORl) > ticks && gmpc(MOTORr) > ticks){
+    int ticks = 11 * degrees;
+    while(gmpc(MOTORl) > -ticks || gmpc(MOTORr) < ticks){
         drive(-MOTOR_SPEED_500, MOTOR_SPEED_500);
     }
     ao();
     msleep(50);
+    printf("LEFT TURN END: Motor_L= %d, Motor_R= %d\n", gmpc(MOTORl),  gmpc(MOTORr));
 }
+
 void back_till_blk(){
     while (analog(SENSORl) <= BLACK && analog(SENSORr) <= BLACK) {
         drive(-MOTOR_SPEED_1500,-MOTOR_SPEED_1500);
@@ -190,7 +192,7 @@ void left_60() {
     ao();
     msleep(50);
 }
-void line_follow_v2(int distance, int speed) {
+void line_follow(int distance, int speed) {
     int high = speed;
     int low = 0.6 * speed;
 
@@ -219,7 +221,7 @@ void line_follow_v2(int distance, int speed) {
     msleep(50);
 }
 
-void line_follow(int distance, int speed) {
+void line_follow_old(int distance, int speed) {
     //follow black line for set distance.
     int high = speed;
     int low = 0.6 * speed;
@@ -377,18 +379,17 @@ int main() {
     shut_down_in(119);
     enable_servos();
     int start_time = seconds();
-    printf("Start Time: %d", start_time);
+    printf("Start Time: %d\n", start_time);
     msleep(35000);
     move_pick_cone1();
     move_pick_cone2();
     return_cone();
+    line_follow(16000,MOTOR_SPEED_1500);
+    
     int end_time = seconds();
     int total_time = end_time - start_time;
     printf("End Time: %d", end_time);
     printf("Total Time: %d",total_time);
     
     
-    
-
-    
- }
+}
