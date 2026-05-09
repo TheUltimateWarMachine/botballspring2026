@@ -8,6 +8,7 @@
 #define MOTORr 3
 #define SENSORl 3
 #define SENSORr 0
+#define LIGHT_SENSOR_PORT 5
 #define BLACK 3000
 #define RIGHT_MOTOR_CORRECTION 1.002
 #define MOTOR_SPEED_250 250
@@ -24,10 +25,11 @@
 #define ARM_CARRY 1600
 #define ARM_MID 1200
 #define ARM_UP 400
-#define ARM_START 900
+#define ARM_START 182
 #define CONE1_LINE_FOLLOW 6000
-#define CONE2_LINE_FOLLOW 2000
-#define RETURN_LINE_FOLLOW 9100
+#define CONE2_LINE_FOLLOW 2300
+#define RETURN_LINE_FOLLOW 9050
+#define SHUT_DOWN_SECS 118
 void move_arm(int end_pos) {
     int current_pos = get_servo_position(ARM);
     printf("move_arm(S): current_pos= %d, end_pos= %d\n", current_pos, end_pos);
@@ -280,7 +282,7 @@ void move_pick_cone1() {
     drive(-500,-500);
     msleep(1100);
     right_degrees(90);
-    //msleep(7000);
+    msleep(7000);
     line_follow(CONE1_LINE_FOLLOW,MOTOR_SPEED_1500);
     right_degrees(DEGREES);
     move_arm(ARM_DOWN);
@@ -310,10 +312,8 @@ void move_pick_cone2() {
     line_follow(CONE2_LINE_FOLLOW, MOTOR_SPEED_1500);
     right_degrees(DEGREES);
     drive(MOTOR_SPEED_1500, MOTOR_SPEED_1500);
-    msleep(1000);
+    msleep(1200);
     ao();
-    msleep(200);
-    msleep(200);
     set_servo_position(CLAW, CLAW_CLOSE);
     left_degrees(DEGREES);
     msleep(200);
@@ -371,7 +371,7 @@ void return_cone()
     left_degrees(160);
     // driving backwards to move to parking spot
     drive(-MOTOR_SPEED_1000,-MOTOR_SPEED_1000);
-    msleep(3000);
+    msleep(2950);
     ao();
     // right turn to parallel park
     right_degrees(100);  
@@ -382,11 +382,20 @@ void return_cone()
 
 
 int main() {
-    shut_down_in(119);
+    /*
+    #if 1
+    printf("Wait for Light()\n");
+    wait_for_light(LIGHT_SENSOR_PORT);
+    printf("Light detected, shut_down_in() in %d secs\n", SHUT_DOWN_SECS);
+    shut_down_in(SHUT_DOWN_SECS);
+ 	#endif
+    */
+    shut_down_in(SHUT_DOWN_SECS);
     enable_servos();
+    move_arm(ARM_START);
     int start_time = seconds();
     printf("Start Time: %d\n", start_time);
-    //msleep(35000);
+   // msleep(35000);
     move_pick_cone1();
     move_pick_cone2();
     return_cone();
